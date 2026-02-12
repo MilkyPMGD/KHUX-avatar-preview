@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>KHUX Avatar Studio</title>
+<style>
+body {
+    margin:0;
+    font-family:Arial;
+    background:#111;
+    color:white;
+    display:flex;
+    height:100vh;
+}
+
+#sidebar {
+    width:300px;
+    background:#1c1f26;
+    border-right:2px solid #2e3440;
+    overflow-y:auto;
+    padding:15px;
+}
+
+h2 {
+    text-align:center;
+    color:#4fc3f7;
+}
+
+.category {
+    margin-bottom:20px;
+}
+
+.thumb {
+    width:60px;
+    margin:4px;
+    cursor:pointer;
+    border:1px solid #333;
+    background:#000;
+}
+
+#workspace {
+    flex:1;
+    position:relative;
+    background:radial-gradient(circle at center,#1e222b,#0c0f14);
+}
+
+.avatar-layer {
+    position:absolute;
+    width:300px;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    cursor:grab;
+}
+
+button {
+    width:100%;
+    margin-top:5px;
+    padding:6px;
+    background:#4fc3f7;
+    border:none;
+    cursor:pointer;
+}
+button:hover { background:#81d4fa; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>KHUX Studio</h2>
+    <div id="categories"></div>
+    <button onclick="exportPNG()">Export PNG</button>
+    <button onclick="resetPositions()">Reset Positions</button>
+</div>
+
+<div id="workspace"></div>
+
+<script>
+const baseURL = "https://roboloid.github.io/khux/assets/";
+const workspace = document.getElementById("workspace");
+const categoriesDiv = document.getElementById("categories");
+
+let layers = {};
+
+fetch(baseURL + "assets.json")
+.then(res => res.json())
+.then(data => init(data))
+.catch(() => alert("Missing assets.json file."));
+
+function init(data){
+    for(const category in data){
+        createCategory(category, data[category]);
+    }
+}
+
+function createCategory(name, items){
+    const container = document.createElement("div");
+    container.className = "category";
+    container.innerHTML = `<h3>${name.toUpperCase()}</h3>`;
+    
+    items.forEach(file => {
+        const img = document.createElement("img");
+        img.src = baseURL + file;
+        img.className = "thumb";
+        img.onclick = () => equipItem(name, file);
+        container.appendChild(img);
+    });
+
+    categoriesDiv.appendChild(container);
+}
+
+function equipItem(category, file){
+    if(!layers[category]){
+        const img = document.createElement("img");
+        img.className = "avatar-layer";
+        makeDraggable(img);
+        workspace.appendChild(img);
+        layers[category] = img;
+    }
+    layers[category].src = baseURL + file;
+}
+
+function makeDraggable(el){
+    let offsetX, offsetY, isDragging=false;
+
+    el.onmousedown = e=>{
+        isDragging=true;
+        offsetX=e.offsetX;
+        offsetY=e.offsetY;
+        el.style.cursor="grabbing";
+    };
+
+    document.onmousemove = e=>{
+        if(!isDragging) return;
+        el.style.left = e.pageX - offsetX + "px";
+        el.style.top = e.pageY - offsetY + "px";
+        el.style.transform="none";
+    };
+
+    document.onmouseup = ()=>{
+        isDragging=false;
+        el.style.cursor="grab";
+    };
+}
+
+function resetPositions(){
+    for(const key in layers){
+        layers[key].style.left="50%";
+        layers[key].style.top="50%";
+        layers[key].style.transform="translate(-50%,-50%)";
+    }
+}
+
+function exportPNG(){
+    const canvas=document.createElement("canvas");
+    canvas.width=workspace.clientWidth;
+    canvas.height=workspace.clientHeight;
+    const ctx=canvas.getContext("2d");
+
+    const promises=[];
+
+    Object.values(layers).forEach(layer=>{
+        if(!layer.src) return;
+        const img=new Image();
+        img.crossOrigin="anonymous";
+        img.src=layer.src;
+        promises.push(new Promise(res=>{
+            img.onload=()=>{
+                const x=layer.offsetLeft;
+                const y=layer.offsetTop;
+                ctx.drawImage(img,x,y,layer.width,layer.height);
+                res();
+            };
+        }));
+    });
+
+    Promise.all(promises).then(()=>{
+        const link=document.createElement("a");
+        link.download="khux_avatar.png";
+        link.href=canvas.toDataURL();
+        link.click();
+    });
+}
+</script>
+
+</body>
+</html>
